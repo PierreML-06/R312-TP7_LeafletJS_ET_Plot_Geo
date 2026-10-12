@@ -6,9 +6,87 @@ import Layout from "../layouts/Layout.astro";
 import * as Plot from "@observablehq/plot";
 import listeEtablissements from "../assets/listeEtablissements.json";
 import populationMain from "../assets/populationMain.json";
+import penguins from "../assets/penguins.json";
 
 // ---------------------------------------------------------------------------
-// Données de la planche 01 : population 2021 par tranche d'âge et par sexe
+// Planche 01 : nuage de points des manchots (longueur et épaisseur du bec)
+// ---------------------------------------------------------------------------
+
+// Espèces du jeu de données, avec la couleur de chacune (palette de l'atlas).
+// Un attribut SVG n'accepte pas var() : on écrit les codes hexadécimaux.
+// Contrastes sur le fond #f6f0e1 : ardoise 7,37:1, vermillon 4,08:1, ocre 4,45:1.
+const especes = ["Adelie", "Chinstrap", "Gentoo"];
+const couleursEspeces = ["#2c5266", "#d9381a", "#8a6a12"];
+
+// Un manchot est dessiné seulement si ses deux mesures existent
+// (Plot ignore de lui-même les valeurs null).
+const aMesures = (m: (typeof penguins)[number]) =>
+  m.culmen_length_mm !== null && m.culmen_depth_mm !== null;
+const manchotsMesures = penguins.filter(aMesures);
+const nbManchots = penguins.length;
+const nbSansMesure = nbManchots - manchotsMesures.length;
+const effectifs = especes.map((espece) => ({
+  espece,
+  nombre: manchotsMesures.filter((m) => m.species === espece).length,
+}));
+const listeEffectifs = new Intl.ListFormat("fr").format(
+  effectifs.map((e) => `${e.nombre} ${e.espece}`),
+);
+
+const optionsManchots = {
+  // Textes qui deviennent <h2>, <h3> et <figcaption> dans un <figure>
+  title: "Longueur et épaisseur du bec des manchots",
+  subtitle: `${manchotsMesures.length} manchots mesurés, trois espèces`,
+  caption:
+    "Source : jeu de données penguins fourni avec le TP. Les manchots sans mesure du bec ne sont pas dessinés.",
+  // Attributs ARIA posés sur le <svg>
+  ariaLabel:
+    "Nuage de points : épaisseur du bec en fonction de sa longueur, pour trois espèces de manchots",
+  ariaDescription: `Chaque point est un manchot, placé selon la longueur de son bec (axe horizontal) et son épaisseur (axe vertical). Chaque espèce a sa couleur et sa forme. Les points forment trois groupes assez distincts selon l’espèce. Manchots mesurés : ${listeEffectifs}.`,
+  width: 400,
+  height: 380,
+  marginTop: 30,
+  marginRight: 14,
+  marginBottom: 46,
+  marginLeft: 50,
+  style: {
+    fontFamily: "var(--font-donnee)",
+    fontSize: "13px",
+    color: "var(--color-encre)",
+  },
+  x: {
+    label: "Longueur du bec (mm)",
+    labelAnchor: "center",
+    labelArrow: "none",
+    grid: true,
+  },
+  y: {
+    label: "Épaisseur du bec (mm)",
+    labelArrow: "none",
+    grid: true,
+  },
+  // La couleur et la forme suivent la même variable : la couleur n'est jamais
+  // la seule information. Plot ne fusionne pas les deux légendes : on garde
+  // celle des formes, déjà colorée (une seule légende, sans doublon).
+  color: {
+    legend: false,
+    label: "Espèce",
+    domain: especes,
+    range: couleursEspeces,
+  },
+  symbol: { legend: true, label: "Espèce", domain: especes },
+  marks: [
+    Plot.dot(penguins, {
+      x: "culmen_length_mm",
+      y: "culmen_depth_mm",
+      stroke: "species",
+      symbol: "species",
+    }),
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Données de la planche 01 bis : population 2021 par tranche d'âge et par sexe
 // ---------------------------------------------------------------------------
 
 // Les 7 tranches d'âge disjointes, de la plus jeune à la plus âgée.
@@ -92,7 +170,7 @@ const pourcent = (part: number) =>
   `${(part * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
 
 // ---------------------------------------------------------------------------
-// Options du graphique Plot (pyramide des âges)
+// Options du graphique Plot (pyramide des âges, planche 01 bis)
 // ---------------------------------------------------------------------------
 
 // Hommes à gauche de l'axe (valeurs négatives), femmes à droite ; en millions
@@ -192,8 +270,8 @@ const nbEtablissements = listeEtablissements.filter(
     ]}
   >
     <p>
-      Cet atlas réunit les trois exercices du TP&nbsp;: un graphique accessible
-      rendu sur le serveur, une carte interactive des établissements
+      Cet atlas réunit les trois exercices du TP&nbsp;: deux graphiques accessibles
+      rendus sur le serveur, une carte interactive des établissements
       d’enseignement supérieur et une carte de la population par département.
     </p>
   </Cartouche>
@@ -205,14 +283,17 @@ const nbEtablissements = listeEtablissements.filter(
         <span class="sommaire-numero" aria-hidden="true">01</span>
         <div>
           <a href="#planche-01" class="sommaire-lien">
-            Population par âge et par sexe
+            Bec des manchots et accessibilité
           </a>
           <p class="sommaire-resume">
-            La pyramide des âges de 2021, dessinée avec Observable Plot et
-            décrite pour les lecteurs d’écran.
+            Un nuage de points dessiné avec Observable Plot et décrit pour les
+            lecteurs d’écran. Suite&nbsp;:{" "}
+            <a href="#planche-01-bis">la pyramide des âges de 2021</a>.
           </p>
         </div>
-        <p class="sommaire-donnee">Sur cette page<br />{pyramide.length} barres</p>
+        <p class="sommaire-donnee">
+          Sur cette page<br />{nbManchots} manchots
+        </p>
       </li>
       <li class="sommaire-ligne">
         <span class="sommaire-numero" aria-hidden="true">02</span>
@@ -243,24 +324,25 @@ const nbEtablissements = listeEtablissements.filter(
     </ol>
   </section>
 
-  <section id="planche-01" class="section grille grille--figure">
+  <section
+    id="planche-01"
+    class="section grille grille--figure"
+    aria-labelledby="titre-01"
+  >
     <Planche numero="01" note="Observable Plot, rendu sur le serveur">
-      <PlotFigure options={optionsPyramide} />
+      <PlotFigure options={optionsManchots} />
     </Planche>
 
     <div class="texte">
-      <h2 class="titre-section">Ce que montre la planche</h2>
+      <h2 id="titre-01" class="titre-section">Ce que montre la planche 01</h2>
       <p>
-        Les {departements.size} départements du fichier totalisent
-        {millions(total)} d’habitants en 2021, dont {pourcent(totalFemmes / total)}
-        de femmes. La tranche la plus peuplée est «&nbsp;{
-          tranchePlusPeuplee.age.toLowerCase()
-        }&nbsp;»&nbsp;: {millions(tranchePlusPeuplee.population)} de personnes.
+        Le jeu de données décrit {nbManchots} manchots de trois espèces.{" "}
+        Parmi eux, {nbSansMesure} n’ont aucune mesure du bec et ne sont pas
+        dessinés&nbsp;: il reste {manchotsMesures.length} manchots ({listeEffectifs}).
       </p>
       <p>
-        Les hommes sont plus nombreux dans les tranches {listeTranchesHommes}.
-        L’écart s’inverse ensuite&nbsp;: à {derniere.toLowerCase()}, on compte
-        {millions(femmesAgees)} de femmes pour {millions(hommesAges)} d’hommes.
+        Les points se regroupent en trois nuages assez distincts&nbsp;: l’espèce
+        suffit presque à deviner la forme du bec.
       </p>
 
       <h2 class="titre-section">Accessibilité du graphique</h2>
@@ -282,12 +364,12 @@ const nbEtablissements = listeEtablissements.filter(
         </li>
         <li>
           <code>ariaLabel</code> donne un nom au SVG et
-          <code>ariaDescription</code> résume ce que montre la pyramide.
+          <code>ariaDescription</code> résume ce que montre le nuage de points.
         </li>
         <li>
           Les axes sont libellés en français, la légende relie chaque couleur à
-          un sexe et chaque barre porte sa valeur&nbsp;: la couleur n’est jamais
-          la seule information.
+          une espèce et chaque espèce a sa couleur et sa forme&nbsp;: la
+          couleur n’est jamais la seule information.
         </li>
       </ul>
 
@@ -304,6 +386,39 @@ const nbEtablissements = listeEtablissements.filter(
           affiche son nom et sa description.
         </li>
       </ol>
+    </div>
+  </section>
+
+  <section
+    id="planche-01-bis"
+    class="section grille grille--figure"
+    aria-labelledby="titre-01-bis"
+  >
+    <Planche numero="01 bis" note="Observable Plot, rendu sur le serveur">
+      <PlotFigure options={optionsPyramide} />
+    </Planche>
+
+    <div class="texte">
+      <h2 id="titre-01-bis" class="titre-section">
+        Ce que montre la planche 01 bis
+      </h2>
+      <p>
+        Les {departements.size} départements du fichier totalisent
+        {millions(total)} d’habitants en 2021, dont {pourcent(totalFemmes / total)}
+        de femmes. La tranche la plus peuplée est «&nbsp;{
+          tranchePlusPeuplee.age.toLowerCase()
+        }&nbsp;»&nbsp;: {millions(tranchePlusPeuplee.population)} de personnes.
+      </p>
+      <p>
+        Les hommes sont plus nombreux dans les tranches {listeTranchesHommes}.
+        L’écart s’inverse ensuite&nbsp;: à {derniere.toLowerCase()}, on compte
+        {millions(femmesAgees)} de femmes pour {millions(hommesAges)} d’hommes.
+      </p>
+
+      <p>
+        Les options d’accessibilité sont les mêmes que pour la planche 01&nbsp;:
+        voir <a href="#planche-01">«&nbsp;Accessibilité du graphique&nbsp;»</a>.
+      </p>
     </div>
   </section>
 </Layout>
