@@ -1,0 +1,40 @@
+---
+// Cartouche de titre d'une page de l'atlas : numéro de planche, titre (le <h1>
+// de la page), texte de présentation (contenu du composant) et fiche de données.
+interface Props {
+  /** Numéro de planche ("02", "03"). Absent sur la page d'ouverture. */
+  numero?: string;
+  /** Titre de la page */
+  titre: string;
+  /** Lignes de la fiche : échelle, source, coordonnées, etc. */
+  fiche: { terme: string; valeur: string }[];
+}
+
+const { numero, titre, fiche } = Astro.props;
+---
+
+<header class:list={["cartouche", { "cartouche--ouverture": !numero }]}>
+  {
+    numero && (
+      <p class="cartouche-numero">
+        Planche <span class="cartouche-chiffres">{numero}</span>
+      </p>
+    )
+  }
+  <h1 class="titre-planche cartouche-titre">{titre}</h1>
+  <div class="cartouche-texte">
+    <slot />
+  </div>
+  <div class="fiche cartouche-fiche">
+    <dl class="fiche-lignes">
+      {
+        fiche.map((ligne) => (
+          <div class="fiche-ligne">
+            <dt>{ligne.terme}</dt>
+            <dd>{ligne.valeur}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </div>
+</header>

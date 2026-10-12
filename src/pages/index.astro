@@ -1,0 +1,309 @@
+---
+import Cartouche from "../components/Cartouche.astro";
+import Planche from "../components/Planche.astro";
+import PlotFigure from "../components/PlotFigure.astro";
+import Layout from "../layouts/Layout.astro";
+import * as Plot from "@observablehq/plot";
+import listeEtablissements from "../assets/listeEtablissements.json";
+import populationMain from "../assets/populationMain.json";
+
+// ---------------------------------------------------------------------------
+// Données de la planche 01 : population 2021 par tranche d'âge et par sexe
+// ---------------------------------------------------------------------------
+
+// Les 7 tranches d'âge disjointes, de la plus jeune à la plus âgée.
+// "age" est la valeur de la donnée (après trim), "etiquette" le texte de l'axe.
+const tranches = [
+  { age: "Moins de 15 ans", etiquette: "0–14" },
+  { age: "De 15 à 24 ans", etiquette: "15–24" },
+  { age: "De 25 à 39 ans", etiquette: "25–39" },
+  { age: "De 40 à 54 ans", etiquette: "40–54" },
+  { age: "De 55 à 64 ans", etiquette: "55–64" },
+  { age: "De 65 à 79 ans", etiquette: "65–79" },
+  { age: "80 ans ou plus", etiquette: "80 et +" },
+];
+const sexes = ["Homme", "Femme"];
+
+// Somme sur tous les départements : clé "tranche|sexe" -> population
+const sommes = new Map<string, number>();
+const departements = new Set<string>();
+for (const p of populationMain) {
+  // trim() : la donnée contient "De 15 à 24 ans " (espace final)
+  const age = p["Âge"].trim();
+  if (p.Période !== 2021 || !sexes.includes(p.Sexe)) continue;
+  if (!tranches.some((t) => t.age === age)) continue;
+
+  const cle = `${age}|${p.Sexe}`;
+  sommes.set(cle, (sommes.get(cle) ?? 0) + p.Valeur);
+  departements.add(p.Géographie);
+}
+const population = (age: string, sexe: string) =>
+  sommes.get(`${age}|${sexe}`) ?? 0;
+
+// Une ligne par barre du graphique (7 tranches x 2 sexes)
+const pyramide = tranches.flatMap((t) =>
+  sexes.map((sexe) => ({
+    tranche: t.etiquette,
+    sexe,
+    population: population(t.age, sexe),
+  })),
+);
+type Barre = (typeof pyramide)[number];
+
+// ---------------------------------------------------------------------------
+// Chiffres cités dans les textes : tous calculés à partir des sommes
+// ---------------------------------------------------------------------------
+const somme = (valeurs: number[]) => valeurs.reduce((a, b) => a + b, 0);
+const totalFemmes = somme(tranches.map((t) => population(t.age, "Femme")));
+const totalHommes = somme(tranches.map((t) => population(t.age, "Homme")));
+const total = totalFemmes + totalHommes;
+
+// Tranche la plus peuplée, femmes et hommes réunis
+const totauxParTranche = tranches.map((t) => ({
+  age: t.age,
+  population: population(t.age, "Femme") + population(t.age, "Homme"),
+}));
+const tranchePlusPeuplee = totauxParTranche.reduce((a, b) =>
+  b.population > a.population ? b : a,
+);
+
+// Tranches où les hommes sont plus nombreux que les femmes
+const tranchesHommes = tranches
+  .filter((t) => population(t.age, "Homme") > population(t.age, "Femme"))
+  .map((t) => `« ${t.age.toLowerCase()} »`);
+const listeTranchesHommes = new Intl.ListFormat("fr").format(tranchesHommes);
+
+// La tranche la plus âgée, où l'écart entre les sexes est le plus visible
+const derniere = tranches[tranches.length - 1].age;
+const femmesAgees = population(derniere, "Femme");
+const hommesAges = population(derniere, "Homme");
+
+// 6649139 -> "6,65"
+const enMillions = (n: number) =>
+  (n / 1e6).toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+// "2,62 millions" ou "1,48 million" (singulier en dessous de 2)
+const millions = (n: number) =>
+  `${enMillions(n)} million${n >= 2e6 ? "s" : ""}`;
+// 51.6 -> "51,6 %"
+const pourcent = (part: number) =>
+  `${(part * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
+
+// ---------------------------------------------------------------------------
+// Options du graphique Plot (pyramide des âges)
+// ---------------------------------------------------------------------------
+
+// Hommes à gauche de l'axe (valeurs négatives), femmes à droite ; en millions
+const position = (d: Barre) =>
+  (d.sexe === "Homme" ? -d.population : d.population) / 1e6;
+
+// Borne de l'axe : la plus longue barre, plus 2 millions pour loger les valeurs
+const borne =
+  Math.ceil(Math.max(...pyramide.map((d) => d.population)) / 1e6) + 2;
+
+const optionsPyramide = {
+  // Textes qui deviennent <h2>, <h3> et <figcaption> dans un <figure>
+  title: "Population par tranche d’âge et par sexe",
+  subtitle: `France, ${departements.size} départements, année 2021`,
+  caption:
+    "Source : fichier populationMain.json du TP (recensement de la population). Les tranches d’âge n’ont pas toutes la même amplitude.",
+  // Attributs ARIA posés sur le <svg>
+  ariaLabel:
+    "Pyramide des âges de la France en 2021, par tranche d’âge et par sexe",
+  ariaDescription: `Barres horizontales, une ligne par tranche d’âge, de « 80 ans ou plus » en haut à « moins de 15 ans » en bas : les hommes à gauche, les femmes à droite. Les hommes sont plus nombreux dans les tranches ${listeTranchesHommes} ; les femmes sont plus nombreuses dans toutes les autres. À ${derniere.toLowerCase()}, on compte ${millions(femmesAgees)} de femmes pour ${millions(hommesAges)} d’hommes.`,
+  width: 400,
+  height: 380,
+  marginTop: 30,
+  marginRight: 14,
+  marginBottom: 46,
+  marginLeft: 68,
+  // Police et couleur du texte accordées au reste du site (jetons de global.css)
+  style: {
+    fontFamily: "var(--font-donnee)",
+    fontSize: "13px",
+    color: "var(--color-encre)",
+  },
+  x: {
+    label: "Population (en millions d’habitants)",
+    labelAnchor: "center",
+    labelArrow: "none",
+    domain: [-borne, borne],
+    ticks: 6,
+    // Les valeurs de gauche sont négatives : on affiche leur valeur absolue
+    tickFormat: (d: number) => Math.abs(d).toLocaleString("fr-FR"),
+    grid: true,
+  },
+  y: {
+    label: "Tranche d’âge (ans)",
+    labelArrow: "none",
+    // Les plus âgés en haut, comme dans une pyramide des âges
+    domain: tranches.map((t) => t.etiquette).reverse(),
+  },
+  color: {
+    legend: true,
+    label: "Sexe",
+    domain: sexes,
+    // Ardoise et vermillon de la palette (un attribut SVG n'accepte pas var())
+    range: ["#2c5266", "#d9381a"],
+  },
+  marks: [
+    Plot.barX(pyramide, { y: "tranche", x: position, fill: "sexe" }),
+    // Valeur écrite au bout de chaque barre : la couleur n'est pas la seule information
+    Plot.text(
+      pyramide.filter((d) => d.sexe === "Homme"),
+      {
+        y: "tranche",
+        x: position,
+        text: (d: Barre) => enMillions(d.population),
+        textAnchor: "end",
+        dx: -6,
+      },
+    ),
+    Plot.text(
+      pyramide.filter((d) => d.sexe === "Femme"),
+      {
+        y: "tranche",
+        x: position,
+        text: (d: Barre) => enMillions(d.population),
+        textAnchor: "start",
+        dx: 6,
+      },
+    ),
+    Plot.ruleX([0]),
+  ],
+};
+
+// Nombre de points de la planche 02 (coordonnées valides uniquement)
+const nbEtablissements = listeEtablissements.filter(
+  (e) => Number.isFinite(e.lat) && Number.isFinite(e.lon),
+).length;
+---
+
+<Layout title={"Atlas R312 : la France en trois planches"}>
+  <Cartouche
+    titre="La France en trois planches"
+    fiche={[
+      { terme: "Module", valeur: "R312, BUT MMI" },
+      { terme: "Travail pratique", valeur: "TP7, Leaflet.js et Plot Geo" },
+      { terme: "Centre des cartes", valeur: "46,6033° N, 1,8830° E" },
+      { terme: "Outils", valeur: "Astro, Observable Plot, Leaflet" },
+    ]}
+  >
+    <p>
+      Cet atlas réunit les trois exercices du TP&nbsp;: un graphique accessible
+      rendu sur le serveur, une carte interactive des établissements
+      d’enseignement supérieur et une carte de la population par département.
+    </p>
+  </Cartouche>
+
+  <section class="grille grille--sommaire" aria-labelledby="titre-sommaire">
+    <h2 id="titre-sommaire" class="titre-section">Sommaire des planches</h2>
+    <ol>
+      <li class="sommaire-ligne">
+        <span class="sommaire-numero" aria-hidden="true">01</span>
+        <div>
+          <a href="#planche-01" class="sommaire-lien">
+            Population par âge et par sexe
+          </a>
+          <p class="sommaire-resume">
+            La pyramide des âges de 2021, dessinée avec Observable Plot et
+            décrite pour les lecteurs d’écran.
+          </p>
+        </div>
+        <p class="sommaire-donnee">Sur cette page<br />{pyramide.length} barres</p>
+      </li>
+      <li class="sommaire-ligne">
+        <span class="sommaire-numero" aria-hidden="true">02</span>
+        <div>
+          <a href="/leaflet" class="sommaire-lien">
+            Établissements du supérieur
+          </a>
+          <p class="sommaire-resume">
+            Une carte Leaflet sur fond OpenStreetMap&nbsp;: un point par
+            établissement, son nom au clic.
+          </p>
+        </div>
+        <p class="sommaire-donnee">
+          Leaflet<br />{nbEtablissements.toLocaleString("fr-FR")} points
+        </p>
+      </li>
+      <li class="sommaire-ligne">
+        <span class="sommaire-numero" aria-hidden="true">03</span>
+        <div>
+          <a href="/geo" class="sommaire-lien">Population par département</a>
+          <p class="sommaire-resume">
+            Une carte choroplèthe tracée à partir d’un fichier GeoJSON, à
+            filtrer par année, par sexe et par tranche d’âge.
+          </p>
+        </div>
+        <p class="sommaire-donnee">Plot Geo<br />3 filtres</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="planche-01" class="section grille grille--figure">
+    <Planche numero="01" note="Observable Plot, rendu sur le serveur">
+      <PlotFigure options={optionsPyramide} />
+    </Planche>
+
+    <div class="texte">
+      <h2 class="titre-section">Ce que montre la planche</h2>
+      <p>
+        Les {departements.size} départements du fichier totalisent
+        {millions(total)} d’habitants en 2021, dont {pourcent(totalFemmes / total)}
+        de femmes. La tranche la plus peuplée est «&nbsp;{
+          tranchePlusPeuplee.age.toLowerCase()
+        }&nbsp;»&nbsp;: {millions(tranchePlusPeuplee.population)} de personnes.
+      </p>
+      <p>
+        Les hommes sont plus nombreux dans les tranches {listeTranchesHommes}.
+        L’écart s’inverse ensuite&nbsp;: à {derniere.toLowerCase()}, on compte
+        {millions(femmesAgees)} de femmes pour {millions(hommesAges)} d’hommes.
+      </p>
+
+      <h2 class="titre-section">Accessibilité du graphique</h2>
+      <p>
+        Le graphique est dessiné sur le serveur&nbsp;: le navigateur reçoit une
+        figure HTML et un SVG déjà prêts, lisibles sans JavaScript.
+      </p>
+
+      <h3 class="titre-sous-section">Ce qui est en place</h3>
+      <ul class="liste-tirets">
+        <li>
+          <code>title</code> et <code>subtitle</code> deviennent un titre
+          <code>&lt;h2&gt;</code> et un sous-titre <code>&lt;h3&gt;</code> dans
+          la figure.
+        </li>
+        <li>
+          <code>caption</code> devient un <code>&lt;figcaption&gt;</code>&nbsp;:
+          la source des données.
+        </li>
+        <li>
+          <code>ariaLabel</code> donne un nom au SVG et
+          <code>ariaDescription</code> résume ce que montre la pyramide.
+        </li>
+        <li>
+          Les axes sont libellés en français, la légende relie chaque couleur à
+          un sexe et chaque barre porte sa valeur&nbsp;: la couleur n’est jamais
+          la seule information.
+        </li>
+      </ul>
+
+      <h3 class="titre-sous-section">Comment le vérifier</h3>
+      <ol class="liste-numeros">
+        <li>
+          Ouvrez les DevTools de Chrome (touche F12), puis le panneau
+          Lighthouse. Cochez la catégorie «&nbsp;Accessibilité&nbsp;» et lancez
+          l’analyse de la page.
+        </li>
+        <li>
+          Dans le panneau Éléments, sélectionnez le SVG du graphique, puis
+          ouvrez l’onglet Accessibilité&nbsp;: l’arborescence d’accessibilité
+          affiche son nom et sa description.
+        </li>
+      </ol>
+    </div>
+  </section>
+</Layout>

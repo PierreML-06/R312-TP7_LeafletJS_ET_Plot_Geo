@@ -1,0 +1,219 @@
+---
+import Cartouche from "../components/Cartouche.astro";
+import Planche from "../components/Planche.astro";
+import Layout from "../layouts/Layout.astro";
+import populationMain from "../assets/populationMain.json";
+
+// Périodes : de la plus récente à la plus ancienne
+const listePeriode = [...new Set(populationMain.map((d) => d.Période))].sort(
+  (a, b) => b - a,
+);
+
+// Sexes : "Total" en premier, puis les autres valeurs
+const listeSexe = [...new Set(populationMain.map((d) => d.Sexe))].sort(
+  (a, b) => Number(b === "Total") - Number(a === "Total"),
+);
+
+// Âges : ordre logique explicite (sans l'espace final de la donnée)
+const ordreAges = [
+  "Total",
+  "Moins de 15 ans",
+  "Moins de 20 ans",
+  "De 15 à 24 ans",
+  "De 25 à 39 ans",
+  "De 40 à 54 ans",
+  "De 55 à 64 ans",
+  "De 65 à 79 ans",
+  "80 ans ou plus",
+  "15 ans ou plus",
+  "65 ans ou plus",
+];
+const agesDonnees = [...new Set(populationMain.map((d) => d["Âge"].trim()))];
+// "2010, 2015, 2021" pour la fiche du cartouche
+const anneesTexte = [...listePeriode].reverse().join(", ");
+
+const listeAge = [
+  ...ordreAges.filter((a) => agesDonnees.includes(a)),
+  // Toute valeur non prévue est ajoutée à la fin
+  ...agesDonnees.filter((a) => !ordreAges.includes(a)),
+];
+---
+
+<Layout
+  title={"Planche 03 : population par département"}
+  description="Carte choroplèthe de la population des départements de France métropolitaine, par année, sexe et tranche d’âge."
+>
+  <Cartouche
+    numero="03"
+    titre="Population par département"
+    fiche={[
+      { terme: "Départements", valeur: "96 (métropole)" },
+      { terme: "Années", valeur: anneesTexte },
+      { terme: "Projection", valeur: "Conique conforme" },
+      { terme: "Source", valeur: "Recensement (fichier du TP)" },
+    ]}
+  >
+    <p>
+      Cette carte montre la population des 96 départements de France
+      métropolitaine. Choisissez l’année, le sexe et la tranche d’âge&nbsp;: la
+      carte est redessinée dans le navigateur.
+    </p>
+  </Cartouche>
+
+  <div class="grille grille--legende">
+    <!-- Panneau de légende : il reste visible pendant le défilement -->
+    <div class="colle">
+      <form class="panneau">
+        <fieldset>
+          <legend>Choix des données</legend>
+          <div class="champs">
+            <div class="champ">
+              <label for="periode">Année</label>
+              <select id="periode">
+                {listePeriode.map((p, i) => <option selected={i === 0}>{p}</option>)}
+              </select>
+            </div>
+            <div class="champ">
+              <label for="sexe">Sexe</label>
+              <select id="sexe">
+                {listeSexe.map((s, i) => <option selected={i === 0}>{s}</option>)}
+              </select>
+            </div>
+            <div class="champ">
+              <label for="age">Âge</label>
+              <select id="age">
+                {listeAge.map((a, i) => <option selected={i === 0}>{a}</option>)}
+              </select>
+            </div>
+          </div>
+        </fieldset>
+      </form>
+
+      <!-- Vide par défaut : le script y écrit « Aucune donnée… » si besoin -->
+      <p id="message" role="status" aria-live="polite" class="note-atlas"></p>
+
+      <ul class="cles mt-5">
+        <li class="cle">
+          <span class="cle-pastille cle-pastille--absente" aria-hidden="true"
+          ></span>
+          Département sans donnée pour la sélection
+        </li>
+      </ul>
+    </div>
+
+    <Planche numero="03" note="Observable Plot, rendu dans le navigateur">
+      <div id="carte">
+        <p class="chargement">Chargement de la carte…</p>
+      </div>
+      <noscript>
+        <p>JavaScript est nécessaire pour afficher la carte.</p>
+      </noscript>
+    </Planche>
+  </div>
+</Layout>
+
+<script>
+  import * as Plot from "@observablehq/plot";
+  import departements from "../assets/departements.geojson.json";
+  import populationMain from "../assets/populationMain.json";
+
+  // Le GeoJSON importé est typé comme un simple objet JSON : cast ciblé pour Plot
+  const geo = departements as unknown as Parameters<typeof Plot.geo>[0];
+  type Departement = { properties: { nom: string } };
+
+  const elmYear = document.getElementById("periode") as HTMLSelectElement;
+  const elmSex = document.getElementById("sexe") as HTMLSelectElement;
+  const elmAge = document.getElementById("age") as HTMLSelectElement;
+  const conteneur = document.getElementById("carte") as HTMLElement;
+  const message = document.getElementById("message") as HTMLElement;
+
+  function dessinerCarte() {
+    const selectedYear = Number(elmYear.value);
+    const selectedSex = elmSex.value;
+    // trim() des deux côtés : la donnée contient "De 15 à 24 ans " (espace final)
+    const selectedAge = elmAge.value.trim();
+
+    // Un seul filtrage, puis une Map nom du département -> population
+    const valeurs = new Map<string, number>();
+    for (const p of populationMain) {
+      if (
+        p.Période === selectedYear &&
+        p.Sexe === selectedSex &&
+        p["Âge"].trim() === selectedAge
+      ) {
+        valeurs.set(p.Géographie, p.Valeur);
+      }
+    }
+
+    // Départements de la carte ayant une valeur
+    const nbAvecDonnee = (departements.features as Departement[]).filter((f) =>
+      valeurs.has(f.properties.nom),
+    ).length;
+    message.textContent =
+      nbAvecDonnee === 0 ? "Aucune donnée pour cette sélection." : "";
+
+    const description = `${selectedYear}, ${selectedSex}, ${selectedAge}`;
+
+    const plot = Plot.plot({
+      title: "Population par département",
+      subtitle: `Année ${selectedYear} – Sexe : ${selectedSex} – Âge : ${selectedAge}`,
+      caption:
+        "Source : fichier populationMain.json du TP (recensement de la population).",
+      ariaLabel: `Carte de la population des départements de France métropolitaine (${description})`,
+      ariaDescription: `Carte choroplèthe des 96 départements de métropole. Plus la couleur est foncée, plus la population est élevée. Sélection : année ${selectedYear}, sexe ${selectedSex}, âge ${selectedAge}.${
+        nbAvecDonnee === 0 ? " Aucune donnée pour cette sélection." : ""
+      }`,
+      // Police et couleur du texte accordées au reste du site (jetons de global.css)
+      style: {
+        fontFamily: "var(--font-donnee)",
+        fontSize: "12px",
+        color: "var(--color-encre)",
+      },
+      // Conique conforme centrée sur la France
+      projection: {
+        type: "conic-conformal",
+        rotate: [-3, -46.5],
+        parallels: [44, 49],
+        domain: geo,
+      },
+      color: {
+        type: "quantile",
+        n: 8,
+        scheme: "OrRd", // du crème au rouge, accordé au vermillon de l'atlas
+        label: "Population (en milliers)",
+        legend: true,
+        // Population en milliers (et non en centaines de milliers) pour ne pas
+        // écraser à 0 les petites tranches d'âge comme "80 ans ou plus"
+        transform: (d: number) => d / 1000,
+        // Seuils de la légende arrondis, sinon les décimales se chevauchent
+        tickFormat: (d: number) => Math.round(d).toLocaleString("fr-FR"),
+        // Gris-bleu, bien distinct des classes (même teinte que la clé de légende)
+        unknown: "#9ba6ad",
+      },
+      marks: [
+        Plot.geo(geo, {
+          // undefined si le département n'a pas de ligne pour la sélection
+          fill: (d: Departement) => valeurs.get(d.properties.nom),
+          stroke: "#161b22", // filet à l'encre
+          strokeWidth: 0.5,
+          title: (d: Departement) => {
+            const nom = d.properties.nom;
+            const valeur = valeurs.get(nom);
+            return valeur === undefined
+              ? `${nom} : donnée non disponible`
+              : `${nom} : ${valeur.toLocaleString("fr-FR")} habitants`;
+          },
+          tip: true,
+        }),
+      ],
+    });
+
+    // Remplace le graphique précédent
+    conteneur.replaceChildren(plot);
+  }
+
+  dessinerCarte();
+  for (const elm of [elmYear, elmSex, elmAge]) {
+    elm.addEventListener("change", dessinerCarte);
+  }
+</script>

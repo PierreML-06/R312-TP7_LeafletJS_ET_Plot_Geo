@@ -1,0 +1,1179 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Direction artistique : « Atlas cartographique »
+   Le site est traité comme un atlas imprimé : papier crème, encre bleu-noir,
+   un seul accent vermillon, filets à l'encre, aucune ombre ni dégradé.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Jetons (couleurs et polices)
+   "static" : toutes les variables sont écrites dans le CSS final, même celles
+   qui ne servent que dans les options "style" des graphiques Plot.
+   -------------------------------------------------------------------------- */
+@theme static {
+  /* Papier */
+  --color-papier: #ede4cf; /* fond de page */
+  --color-papier-clair: #f6f0e1; /* fond des planches et des cartouches */
+  --color-papier-fonce: #ddd0b3; /* aplats, survols */
+
+  /* Encre */
+  --color-encre: #161b22; /* texte, filets (13,7:1 sur papier) */
+  --color-encre-douce: #454a51; /* texte secondaire (7,1:1 sur papier) */
+
+  /* Accent : le vermillon vif ne passe pas en petit texte (3,7:1 sur papier).
+     Il est réservé aux grands chiffres et aux marques graphiques ; pour le
+     petit texte et le focus, on utilise la version foncée (5,8:1). */
+  --color-vermillon: #d9381a;
+  --color-vermillon-fonce: #a3290e;
+
+  /* Ton secondaire sourd (barres « Homme » du graphique) */
+  --color-ardoise: #2c5266;
+
+  /* Titrage : Archivo en largeur condensée. Texte : Spectral.
+     Données (coordonnées, numéros, légendes) : IBM Plex Mono. */
+  --font-titre: "Archivo Variable", "Arial Narrow", Arial, sans-serif;
+  --font-texte: "Spectral", Georgia, "Times New Roman", serif;
+  --font-donnee: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+
+:root {
+  /* Graticule : quadrillage très pâle, avec une petite croix à chaque
+     intersection comme sur une carte topographique (motif SVG de 120 px). */
+  --graticule: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M60 0v120M0 60h120' fill='none' stroke='%23161b22' stroke-opacity='.06'/%3E%3Cpath d='M54 60h12M60 54v12' fill='none' stroke='%23161b22' stroke-opacity='.3'/%3E%3C/svg%3E");
+
+  /* Chevron des listes déroulantes */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23161b22' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   2. Base
+   -------------------------------------------------------------------------- */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-papier);
+    background-image: var(--graticule);
+    color: var(--color-encre);
+    font-family: var(--font-texte);
+    font-size: 1.125rem;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background-color: var(--color-encre);
+    color: var(--color-papier-clair);
+  }
+
+  /* Focus clavier : même contour partout, bien visible sur le papier */
+  :focus-visible {
+    outline: 3px solid var(--color-vermillon-fonce);
+    outline-offset: 3px;
+  }
+
+  /* <main> ne reçoit le focus que par le lien d'évitement */
+  main:focus-visible {
+    outline: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p,
+  li,
+  dd,
+  figcaption {
+    text-wrap: pretty;
+  }
+
+  strong {
+    font-weight: 600;
+  }
+
+  /* Noms d'options et de balises cités dans le texte */
+  code {
+    padding: 0.05em 0.3em;
+    background-color: var(--color-papier-fonce);
+    font-family: var(--font-donnee);
+    font-size: 0.82em;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. Composants de l'atlas
+   -------------------------------------------------------------------------- */
+@layer components {
+  /* Largeur utile de la page. La marge latérale (20 px au minimum) laisse la
+     place aux repères de coupe des planches, qui dépassent de 15 px. */
+  .page {
+    width: 100%;
+    max-width: 85rem;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 4vw, 3.5rem);
+  }
+
+  /* Titres en Archivo condensé */
+  .titre-planche,
+  .titre-section,
+  .titre-sous-section {
+    font-family: var(--font-titre);
+    font-weight: 800;
+  }
+
+  /* --- Lien d'évitement ------------------------------------------------- */
+  .lien-evitement {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 10;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border: 2px solid var(--color-encre);
+    background-color: var(--color-encre);
+    color: var(--color-papier-clair);
+    font-family: var(--font-donnee);
+    font-size: 0.875rem;
+    /* Caché hors de l'écran tant qu'il n'a pas le focus */
+    transform: translateY(-200%);
+  }
+
+  .lien-evitement:focus {
+    transform: none;
+  }
+
+  /* --- En-tête ---------------------------------------------------------- */
+  .entete {
+    /* Filet double : deux traits de 2 px séparés par 2 px de papier */
+    border-bottom: 6px double var(--color-encre);
+    background-color: var(--color-papier);
+  }
+
+  .entete-grille {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 2rem;
+    padding-block: 0.875rem;
+  }
+
+  .enseigne {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+
+  .enseigne-nom {
+    font-family: var(--font-titre);
+    font-size: 1.75rem;
+    font-stretch: 62%;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .enseigne-detail {
+    color: var(--color-encre-douce);
+    font-family: var(--font-donnee);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  /* --- Navigation ------------------------------------------------------- */
+  .nav-liste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Sur petit écran, les liens se partagent toute la largeur de la ligne */
+  .nav-liste li {
+    display: flex;
+    flex: 1 1 auto;
+  }
+
+  .nav-lien {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.5rem;
+    /* Cible tactile d'au moins 44 px */
+    min-height: 2.75rem;
+    padding: 0.25rem 0.75rem;
+    border: 2px solid var(--color-encre);
+    background-color: var(--color-papier-clair);
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition:
+      background-color 150ms ease-out,
+      color 150ms ease-out;
+  }
+
+  .nav-lien:hover {
+    background-color: var(--color-papier-fonce);
+  }
+
+  .nav-numero {
+    color: var(--color-vermillon-fonce);
+  }
+
+  /* Page courante : case passée à l'encre */
+  .nav-lien[aria-current="page"] {
+    background-color: var(--color-encre);
+    color: var(--color-papier-clair);
+  }
+
+  .nav-lien[aria-current="page"] .nav-numero {
+    color: inherit;
+  }
+
+  @media (min-width: 40rem) {
+    .nav-liste li {
+      flex: 0 0 auto;
+    }
+
+    .nav-lien {
+      padding-inline: 1rem;
+      font-size: 0.875rem;
+    }
+  }
+
+  /* --- Cartouche de titre ----------------------------------------------- */
+  .cartouche {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+    padding-block: clamp(2rem, 6vw, 4.5rem) clamp(2.5rem, 6vw, 4.5rem);
+  }
+
+  /* « Planche » en chasse fixe, le numéro en très grand chiffre vermillon */
+  .cartouche-numero {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    font-family: var(--font-donnee);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .cartouche-chiffres {
+    color: var(--color-vermillon);
+    font-family: var(--font-titre);
+    font-size: clamp(3.5rem, 9vw, 7rem);
+    font-stretch: 62%;
+    font-weight: 800;
+    line-height: 0.8;
+  }
+
+  .titre-planche {
+    padding-bottom: clamp(1rem, 2.5vw, 1.75rem);
+    border-bottom: 2px solid var(--color-encre);
+    font-size: clamp(2.5rem, 8.2vw, 7rem);
+    font-stretch: 62%;
+    /* Interligne serré, mais assez grand pour les capitales accentuées */
+    line-height: 0.96;
+    text-transform: uppercase;
+    /* Sécurité : un mot très long ne provoque jamais de défilement horizontal */
+    overflow-wrap: anywhere;
+    /* Seule animation d'entrée du site (coupée si l'utilisateur le demande) */
+    animation: pose 500ms ease-out both;
+  }
+
+  .cartouche--ouverture .titre-planche {
+    font-size: clamp(3.25rem, 12.5vw, 11rem);
+    line-height: 0.88;
+  }
+
+  .cartouche-texte {
+    max-width: 38em;
+    font-size: clamp(1.125rem, 1.7vw, 1.375rem);
+    line-height: 1.5;
+  }
+
+  .cartouche-texte > * + * {
+    margin-top: 0.75em;
+  }
+
+  /* Fiche du cartouche : filet double gras-maigre et lignes de données */
+  .fiche {
+    padding: 3px;
+    border: 2px solid var(--color-encre);
+    background-color: var(--color-papier-clair);
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .fiche-lignes {
+    border: 1px solid var(--color-encre);
+  }
+
+  .fiche-ligne {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .fiche-ligne + .fiche-ligne {
+    border-top: 1px solid var(--color-encre);
+  }
+
+  .fiche dt {
+    color: var(--color-encre-douce);
+  }
+
+  .fiche dd {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  /* Grand écran : grille de 12 colonnes, composition asymétrique */
+  @media (min-width: 64rem) {
+    .cartouche {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 2.5rem 2rem;
+    }
+
+    .cartouche-numero {
+      grid-column: 1 / span 2;
+      flex-direction: column;
+      align-items: flex-start;
+      padding-top: 0.625rem;
+      border-top: 2px solid var(--color-encre);
+    }
+
+    .cartouche-titre {
+      grid-column: 3 / -1;
+    }
+
+    .cartouche-texte {
+      grid-column: 3 / span 6;
+    }
+
+    .cartouche-fiche {
+      grid-column: 9 / -1;
+      align-self: start;
+    }
+
+    /* Page d'ouverture : pas de numéro, le titre prend toute la largeur */
+    .cartouche--ouverture .cartouche-titre {
+      grid-column: 1 / -1;
+    }
+
+    .cartouche--ouverture .cartouche-texte {
+      grid-column: 1 / span 7;
+    }
+  }
+
+  /* --- Planche : cadre à filet double et repères de coupe ----------------- */
+  .planche {
+    position: relative;
+    padding: 4px;
+    border: 2px solid var(--color-encre);
+    background-color: var(--color-papier-clair);
+  }
+
+  .planche-cadre {
+    border: 1px solid var(--color-encre);
+  }
+
+  .planche-bandeau {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.125rem 1rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-encre);
+    font-family: var(--font-donnee);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .planche-bandeau span:first-child {
+    font-weight: 500;
+  }
+
+  .planche-corps {
+    padding: clamp(0.75rem, 2.5vw, 1.75rem);
+  }
+
+  /* Variante sans marge intérieure (la carte Leaflet touche le cadre) */
+  .planche--pleine .planche-corps {
+    padding: 0;
+  }
+
+  /* Repères de coupe : une petite équerre à l'extérieur de chaque angle */
+  .repere {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border: 0 solid var(--color-encre);
+    pointer-events: none;
+  }
+
+  .repere--hg {
+    top: -15px;
+    left: -15px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+  }
+
+  .repere--hd {
+    top: -15px;
+    right: -15px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+  }
+
+  .repere--bg {
+    bottom: -15px;
+    left: -15px;
+    border-top-width: 1px;
+    border-right-width: 1px;
+  }
+
+  .repere--bd {
+    right: -15px;
+    bottom: -15px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+
+  /* --- Sections et grilles de page ---------------------------------------- */
+  .section {
+    margin-top: clamp(3.5rem, 8vw, 6.5rem);
+  }
+
+  /* Deux colonnes inégales sur grand écran, une seule en dessous.
+     min-width: 0 empêche un SVG ou une carte d'élargir sa colonne. */
+  .grille {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+
+  .grille > * {
+    min-width: 0;
+  }
+
+  @media (min-width: 64rem) {
+    .grille {
+      gap: 2rem 3.5rem;
+      align-items: start;
+    }
+
+    .grille--sommaire {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    }
+
+    .grille--figure {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
+
+    .grille--carte {
+      grid-template-columns: minmax(0, 9fr) minmax(0, 3fr);
+    }
+
+    .grille--legende {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    }
+
+    /* Le panneau de légende reste visible pendant le défilement */
+    .colle {
+      position: sticky;
+      top: 1.5rem;
+    }
+  }
+
+  .titre-section {
+    font-size: clamp(2rem, 4.2vw, 3.25rem);
+    font-stretch: 68%;
+    line-height: 1;
+  }
+
+  .titre-sous-section {
+    font-size: 1.375rem;
+    font-stretch: 80%;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  /* --- Texte courant ---------------------------------------------------- */
+  .texte {
+    max-width: 36em;
+  }
+
+  .texte > * + * {
+    margin-top: 0.9em;
+  }
+
+  .texte > .titre-section:not(:first-child) {
+    margin-top: 1.25em;
+  }
+
+  .texte > .titre-sous-section {
+    margin-top: 1.5em;
+  }
+
+  .texte a,
+  .pied a {
+    text-decoration: underline;
+    text-decoration-color: var(--color-vermillon-fonce);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+    transition: text-decoration-thickness 150ms ease-out;
+  }
+
+  .texte a:hover,
+  .pied a:hover {
+    text-decoration-thickness: 4px;
+  }
+
+  /* Liste à tirets vermillon */
+  .liste-tirets li {
+    position: relative;
+    padding-left: 1.5rem;
+  }
+
+  .liste-tirets li + li,
+  .liste-numeros li + li {
+    margin-top: 0.5em;
+  }
+
+  .liste-tirets li::before {
+    content: "";
+    position: absolute;
+    top: 0.75em;
+    left: 0;
+    width: 0.75rem;
+    height: 2px;
+    background-color: var(--color-vermillon);
+  }
+
+  /* Liste numérotée : numéros en chasse fixe */
+  .liste-numeros {
+    counter-reset: etape;
+  }
+
+  .liste-numeros li {
+    position: relative;
+    padding-left: 2.25rem;
+    counter-increment: etape;
+  }
+
+  .liste-numeros li::before {
+    content: counter(etape, decimal-leading-zero);
+    position: absolute;
+    top: 0.3em;
+    left: 0;
+    color: var(--color-vermillon-fonce);
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  /* --- Sommaire des planches -------------------------------------------- */
+  .sommaire-ligne {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.5rem 1.25rem;
+    padding: 1.25rem 0.75rem 1.5rem;
+    border-top: 2px solid var(--color-encre);
+    transition: background-color 150ms ease-out;
+  }
+
+  .sommaire-ligne:last-child {
+    border-bottom: 2px solid var(--color-encre);
+  }
+
+  .sommaire-ligne:hover {
+    background-color: var(--color-papier-fonce);
+  }
+
+  .sommaire-numero {
+    color: var(--color-vermillon);
+    font-family: var(--font-titre);
+    font-size: clamp(3rem, 6vw, 4.5rem);
+    font-stretch: 62%;
+    font-weight: 800;
+    line-height: 0.85;
+    transition: color 150ms ease-out;
+  }
+
+  /* Sur l'aplat de survol, le vermillon serait trop peu contrasté */
+  .sommaire-ligne:hover .sommaire-numero {
+    color: var(--color-encre);
+  }
+
+  .sommaire-lien {
+    font-family: var(--font-titre);
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-stretch: 75%;
+    font-weight: 700;
+    line-height: 1.05;
+  }
+
+  /* Toute la ligne est cliquable : le lien s'étend sur la ligne entière */
+  .sommaire-lien::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .sommaire-lien:focus-visible {
+    outline: none;
+  }
+
+  .sommaire-lien:focus-visible::after {
+    outline: 3px solid var(--color-vermillon-fonce);
+    outline-offset: -3px;
+  }
+
+  .sommaire-resume {
+    margin-top: 0.375rem;
+    max-width: 34em;
+    font-size: 1.0625rem;
+    line-height: 1.5;
+  }
+
+  .sommaire-donnee {
+    grid-column: 2;
+    color: var(--color-encre-douce);
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  @media (min-width: 48rem) {
+    .sommaire-ligne {
+      grid-template-columns: 5.5rem minmax(0, 1fr) 11rem;
+    }
+
+    .sommaire-donnee {
+      grid-column: 3;
+      padding-top: 0.5rem;
+      text-align: right;
+    }
+  }
+
+  /* --- Panneau de légende : formulaire de la carte des départements ------- */
+  .panneau {
+    padding: 4px;
+    border: 2px solid var(--color-encre);
+    background-color: var(--color-papier-clair);
+  }
+
+  .panneau fieldset {
+    min-width: 0;
+    padding: 0.5rem 1rem 1.25rem;
+    border: 1px solid var(--color-encre);
+  }
+
+  .panneau legend {
+    padding-inline: 0.5rem;
+    font-family: var(--font-titre);
+    font-size: 1.5rem;
+    font-stretch: 75%;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .champs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  /* Tablette : les trois listes côte à côte au-dessus de la carte */
+  @media (min-width: 40rem) and (max-width: 63.99rem) {
+    .champs {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .champ {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .champ label {
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .champ select {
+    appearance: none;
+    width: 100%;
+    /* Grande cible : 52 px de haut, texte de 16 px (pas de zoom sur iOS) */
+    min-height: 3.25rem;
+    padding: 0.5rem 2.75rem 0.5rem 0.875rem;
+    border: 2px solid var(--color-encre);
+    border-radius: 0;
+    background-color: var(--color-papier);
+    background-image: var(--chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.875rem center;
+    background-size: 0.875rem auto;
+    color: var(--color-encre);
+    font-family: var(--font-donnee);
+    font-size: 1rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background-color 150ms ease-out;
+  }
+
+  .champ select:hover {
+    background-color: var(--color-papier-fonce);
+  }
+
+  .champ select:focus-visible {
+    outline-offset: 2px;
+  }
+
+  /* Note d'atlas (« Aucune donnée ») : le paragraphe reste dans la page pour
+     que les lecteurs d'écran l'annoncent, il ne prend forme que s'il a du texte. */
+  .note-atlas:not(:empty) {
+    position: relative;
+    margin-top: 1.25rem;
+    padding: 0.75rem 1rem 0.875rem 3.5rem;
+    border: 1px dashed var(--color-encre);
+    background-color: var(--color-papier-clair);
+    font-size: 1rem;
+    font-style: italic;
+    line-height: 1.45;
+  }
+
+  .note-atlas:not(:empty)::before {
+    content: "N.B.";
+    position: absolute;
+    top: 0.95rem;
+    left: 0.875rem;
+    color: var(--color-vermillon-fonce);
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  /* Clés de légende (pastille + libellé) */
+  .cles {
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .cle {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    gap: 0.625rem;
+    align-items: start;
+  }
+
+  .cle + .cle {
+    margin-top: 0.625rem;
+  }
+
+  .cle-pastille {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid var(--color-encre);
+  }
+
+  /* Même gris-bleu que l'option "unknown" de la carte (geo.astro) */
+  .cle-pastille--absente {
+    background-color: #9ba6ad;
+  }
+
+  /* Même point que les L.circleMarker de la carte (leaflet.astro) */
+  .cle-pastille--point {
+    width: 0.75rem;
+    height: 0.75rem;
+    margin: 0.2rem 0.25rem;
+    border-radius: 50%;
+    background-color: var(--color-vermillon);
+  }
+
+  /* --- Sélecteur Points / Chaleur et légende de densité (carte Leaflet) --- */
+  .selecteur {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  /* Le titre visible est le h2 ; la légende reste lue par les lecteurs d'écran */
+  .selecteur-legende {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .selecteur-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 2px solid var(--color-encre);
+  }
+
+  .selecteur-option {
+    position: relative;
+  }
+
+  .selecteur-option + .selecteur-option {
+    border-left: 2px solid var(--color-encre);
+  }
+
+  /* Le bouton radio natif reste dans la page (clavier, lecteurs d'écran)
+     mais couvre sa case et reste invisible */
+  .selecteur-option input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .selecteur-option label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--color-papier-clair);
+    color: var(--color-encre);
+    font-family: var(--font-donnee);
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background-color 150ms ease-out;
+  }
+
+  .selecteur-option input:hover + label {
+    background-color: var(--color-papier-fonce);
+  }
+
+  /* Case active passée à l'encre, comme le lien courant de la navigation */
+  .selecteur-option input:checked + label {
+    background-color: var(--color-encre);
+    color: var(--color-papier-clair);
+  }
+
+  .selecteur-option input:focus-visible + label {
+    outline: 3px solid var(--color-vermillon-fonce);
+    outline-offset: -6px;
+  }
+
+  .selecteur-note {
+    margin-top: 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+
+  /* Clé de densité : barre dégradée (couleurs posées par le script) */
+  .cle-densite {
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+
+  .cle-densite-barre {
+    display: block;
+    height: 1.25rem;
+    border: 1px solid var(--color-encre);
+  }
+
+  .cle-densite-mots {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.25rem;
+  }
+
+  .chargement {
+    font-family: var(--font-donnee);
+    font-size: 0.875rem;
+  }
+
+  /* --- Pied de page ----------------------------------------------------- */
+  .pied {
+    margin-top: clamp(4rem, 9vw, 7rem);
+    border-top: 6px double var(--color-encre);
+    background-color: var(--color-papier);
+    color: var(--color-encre-douce);
+    font-family: var(--font-donnee);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+
+  .pied-grille {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem 2rem;
+    padding-block: 1.75rem 2.5rem;
+  }
+
+  .pied strong {
+    display: block;
+    color: var(--color-encre);
+    font-weight: 500;
+  }
+
+  @media (min-width: 48rem) {
+    .pied-grille {
+      grid-template-columns: minmax(0, 4fr) minmax(0, 5fr) minmax(0, 3fr);
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. Graphiques Plot
+   Ces règles sont hors de tout @layer : Plot insère ses propres styles dans la
+   page, et une règle hors calque l'emporte toujours sur une règle en calque.
+   -------------------------------------------------------------------------- */
+
+/* Plot crée un <figure> contenant <h2> (title), <h3> (subtitle), la légende,
+   le <svg> puis <figcaption> (caption). Tailwind remet les titres à zéro. */
+.planche figure > h2 {
+  font-family: var(--font-titre);
+  font-size: clamp(1.5rem, 3vw, 2.125rem);
+  font-stretch: 75%;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.planche figure > h3 {
+  margin-top: 0.375rem;
+  margin-bottom: 1rem;
+  color: var(--color-encre-douce);
+  font-size: 1.0625rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.planche figure > figcaption,
+.legende-figure {
+  margin-top: 1rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--color-encre);
+  color: var(--color-encre-douce);
+  font-family: var(--font-donnee);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* Sous la carte Leaflet, la légende est collée au cadre : on lui rend sa marge */
+.planche--pleine .legende-figure {
+  margin-top: 0;
+  padding: 0.625rem 0.75rem;
+  border-top-width: 2px;
+}
+
+/* Le SVG du graphique occupe la largeur disponible (la rampe de légende garde
+   sa taille) ; l'infobulle de Plot (tip) prend la couleur du papier au lieu du
+   blanc. */
+.planche figure > svg:not([class$="-ramp"]) {
+  width: 100%;
+  max-width: 36rem;
+  height: auto;
+  --plot-background: var(--color-papier-clair);
+}
+
+/* Légendes de couleur générées par Plot : pastilles (accueil), rampe (/geo) */
+.planche figure [class*="-swatches"],
+.planche figure svg[class$="-ramp"] {
+  margin-bottom: 0.75rem;
+  color: var(--color-encre);
+  font-family: var(--font-donnee);
+}
+
+.planche figure [class*="-swatches"] {
+  font-size: 0.8125rem;
+}
+
+.planche figure svg[class$="-ramp"] {
+  font-size: 11px;
+}
+
+/* Carte des départements : la hauteur réservée évite un saut au chargement */
+#carte {
+  min-height: 20rem;
+}
+
+#carte figure > svg:not([class$="-ramp"]) {
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   5. Carte Leaflet
+   Règles hors calque et préfixées par #map pour passer devant leaflet.css.
+   -------------------------------------------------------------------------- */
+#map {
+  /* Hauteur réduite sur mobile, 600 px à partir de 768 px de large */
+  height: 27.5rem;
+  background-color: var(--color-papier-fonce);
+  font-family: var(--font-donnee);
+  /* Les calques de Leaflet (z-index jusqu'à 1000) restent dans la carte */
+  isolation: isolate;
+}
+
+@media (min-width: 48rem) {
+  #map {
+    height: 600px;
+  }
+}
+
+/* Rendu « papier » des tuiles : niveaux de gris, légère teinte sépia */
+#map .leaflet-tile-pane {
+  filter: grayscale(1) sepia(0.35) contrast(1.05);
+}
+
+#map a:focus-visible {
+  outline: 3px solid var(--color-vermillon-fonce);
+  outline-offset: 2px;
+}
+
+/* Boutons de zoom : cases de 44 px à filet d'encre */
+#map .leaflet-bar {
+  border: 2px solid var(--color-encre);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#map .leaflet-bar a {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-bottom: 2px solid var(--color-encre);
+  border-radius: 0;
+  background-color: var(--color-papier-clair);
+  color: var(--color-encre);
+  font: 500 1.375rem / 2.75rem var(--font-donnee);
+  text-indent: 0;
+  transition: background-color 150ms ease-out;
+}
+
+#map .leaflet-bar a:last-child {
+  border-bottom: 0;
+}
+
+#map .leaflet-bar a:hover,
+#map .leaflet-bar a:focus-visible {
+  background-color: var(--color-papier-fonce);
+}
+
+#map .leaflet-bar a.leaflet-disabled {
+  background-color: var(--color-papier-fonce);
+  color: var(--color-encre-douce);
+}
+
+/* Attribution OpenStreetMap : fond opaque, encre sur papier (15:1) */
+#map .leaflet-control-attribution {
+  padding: 0.125rem 0.5rem;
+  border-top: 2px solid var(--color-encre);
+  border-left: 2px solid var(--color-encre);
+  background-color: var(--color-papier-clair);
+  color: var(--color-encre);
+  font-family: var(--font-donnee);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+#map .leaflet-control-attribution a {
+  color: var(--color-encre);
+  text-decoration: underline;
+}
+
+/* Échelle graphique */
+#map .leaflet-control-scale-line {
+  border-color: var(--color-encre);
+  background-color: var(--color-papier-clair);
+  color: var(--color-encre);
+  font-family: var(--font-donnee);
+  font-size: 0.6875rem;
+  text-shadow: none;
+}
+
+/* Popup : étiquette à filet d'encre, sans ombre ni arrondi */
+#map .leaflet-popup-content-wrapper {
+  border: 2px solid var(--color-encre);
+  border-radius: 0;
+  background-color: var(--color-papier-clair);
+  color: var(--color-encre);
+  box-shadow: none;
+}
+
+#map .leaflet-popup-content {
+  margin: 0.75rem 2.5rem 0.75rem 1rem;
+  font-family: var(--font-texte);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+#map .leaflet-popup-content p {
+  margin: 0;
+  font-weight: 600;
+}
+
+#map .leaflet-popup-tip {
+  background-color: var(--color-encre);
+  box-shadow: none;
+}
+
+#map a.leaflet-popup-close-button {
+  top: 2px;
+  right: 2px;
+  width: 2rem;
+  height: 2rem;
+  color: var(--color-encre);
+  font: 500 1.25rem / 2rem var(--font-donnee);
+  transition: background-color 150ms ease-out;
+}
+
+#map a.leaflet-popup-close-button:hover {
+  background-color: var(--color-papier-fonce);
+  color: var(--color-encre);
+}
+
+/* --------------------------------------------------------------------------
+   6. Mouvement
+   -------------------------------------------------------------------------- */
+@keyframes pose {
+  from {
+    opacity: 0;
+    transform: translateY(0.12em);
+  }
+}
+
+/* Aucune animation ni transition si l'utilisateur a demandé moins de mouvement */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

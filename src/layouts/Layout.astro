@@ -1,0 +1,94 @@
+---
+// Polices auto-hébergées (paquets npm @fontsource, aucune requête externe).
+// Le sous-ensemble « latin » contient les caractères accentués français.
+import "@fontsource-variable/archivo/wdth.css"; // titres (largeur variable)
+import "@fontsource/spectral/latin-400.css"; // texte courant
+import "@fontsource/spectral/latin-400-italic.css";
+import "@fontsource/spectral/latin-600.css";
+import "@fontsource/ibm-plex-mono/latin-400.css"; // données
+import "@fontsource/ibm-plex-mono/latin-500.css";
+import "../styles/global.css";
+
+// Titre de la page (utilisé dans <title>) et description pour les moteurs de recherche
+const {
+  title = "TP7 : Leaflet et Plot",
+  description = "Atlas du TP7 de R312 (BUT MMI) : un graphique accessible avec Observable Plot, une carte Leaflet et une carte choroplèthe.",
+} = Astro.props;
+
+// Liens de navigation : une planche par page
+const liens = [
+  { href: "/", numero: "01", texte: "Pyramide des âges" },
+  { href: "/leaflet", numero: "02", texte: "Établissements" },
+  { href: "/geo", numero: "03", texte: "Population" },
+];
+
+// Chemin de la page courante (sans "/" final, sauf pour l'accueil)
+const chemin = Astro.url.pathname.replace(/(.)\/$/, "$1");
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <a href="#contenu" class="lien-evitement">Aller au contenu</a>
+
+    <header class="entete">
+      <div class="page entete-grille">
+        <a href="/" class="enseigne">
+          <span class="enseigne-nom">Atlas R312</span>
+          <span class="enseigne-detail">TP7, Leaflet.js et Plot Geo</span>
+        </a>
+        <nav aria-label="Navigation principale">
+          <ul class="nav-liste">
+            {
+              liens.map((lien) => (
+                <li>
+                  <a
+                    href={lien.href}
+                    aria-current={chemin === lien.href ? "page" : undefined}
+                    class="nav-lien"
+                  >
+                    <span class="nav-numero">{lien.numero}</span>
+                    {lien.texte}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="contenu" tabindex="-1" class="page">
+      <slot />
+    </main>
+
+    <footer class="pied">
+      <div class="page pied-grille">
+        <p>
+          <strong>Atlas R312</strong>
+          Travail pratique n<sup>o</sup>&nbsp;7, «&nbsp;Leaflet.js et Plot
+          Geo&nbsp;». Module R312, BUT MMI.
+        </p>
+        <p>
+          <strong>Sources</strong>
+          Fond de carte&nbsp;: ©&nbsp;contributeurs
+          <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>.
+          Données&nbsp;: fichiers fournis pour le TP (établissements,
+          départements, population).
+        </p>
+        <p>
+          <strong>Outils</strong>
+          Astro, Observable Plot, Leaflet.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

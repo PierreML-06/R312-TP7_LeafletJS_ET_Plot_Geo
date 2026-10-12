@@ -1,0 +1,295 @@
+---
+// Import des styles CSS de Leaflet pour l'affichage de la carte
+import "leaflet/dist/leaflet.css";
+import Cartouche from "../components/Cartouche.astro";
+import Planche from "../components/Planche.astro";
+import Layout from "../layouts/Layout.astro";
+import listeEtablissements from "../assets/listeEtablissements.json";
+
+// Établissements dont les coordonnées sont des nombres valides
+const valides = listeEtablissements.filter(
+  (e) => Number.isFinite(e.lat) && Number.isFinite(e.lon),
+);
+
+// Nombre d'établissements réellement affichés
+const nombre = valides.length;
+// "2 507" : séparateur de milliers français
+const nombreTexte = nombre.toLocaleString("fr-FR");
+
+// Fait chiffré pour décrire la carte de chaleur en mots :
+// on cherche l'établissement qui a le plus de voisins dans un rayon de 10 km.
+const RAYON_KM = 10;
+
+type Coord = { lat: number; lon: number };
+
+// Distance entre deux points (formule de haversine), en kilomètres
+function distanceKm(a: Coord, b: Coord) {
+  const rad = Math.PI / 180;
+  const h =
+    Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 +
+    Math.cos(a.lat * rad) *
+      Math.cos(b.lat * rad) *
+      Math.sin(((b.lon - a.lon) * rad) / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+// Pour chaque établissement, on compte ceux situés à moins de 10 km
+// (lui-même compris) et on garde le maximum.
+let plusDense = { name: "", voisins: 0 };
+for (const e of valides) {
+  const voisins = valides.filter((v) => distanceKm(e, v) <= RAYON_KM).length;
+  if (voisins > plusDense.voisins) plusDense = { name: e.name, voisins };
+}
+const voisinsTexte = plusDense.voisins.toLocaleString("fr-FR");
+---
+
+<Layout
+  title={"Planche 02 : carte Leaflet des établissements"}
+  description="Carte interactive Leaflet des établissements d’enseignement supérieur en France, sur fond OpenStreetMap."
+>
+  <Cartouche
+    numero="02"
+    titre="Établissements du supérieur"
+    fiche={[
+      { terme: "Établissements", valeur: nombreTexte },
+      { terme: "Centre", valeur: "46,6033° N, 1,8830° E" },
+      { terme: "Zoom initial", valeur: "6" },
+      { terme: "Fond de carte", valeur: "OpenStreetMap" },
+    ]}
+  >
+    <p>
+      Cette carte interactive place les établissements d’enseignement supérieur
+      en France. Chaque point vermillon est un établissement du fichier fourni
+      pour le TP.
+    </p>
+  </Cartouche>
+
+  <div class="grille grille--carte">
+    <Planche numero="02" note="Leaflet, fond OpenStreetMap" pleine>
+      <figure>
+        <!-- La hauteur de la carte est fixée dans global.css (600 px sur grand écran) -->
+        <div
+          id="map"
+          role="region"
+          aria-label="Carte interactive des établissements d’enseignement supérieur en France"
+        >
+        </div>
+        <figcaption class="legende-figure">
+          {nombreTexte} établissements affichés. Fond de carte&nbsp;:
+          ©&nbsp;contributeurs OpenStreetMap. La carte de chaleur montre la
+          concentration des établissements&nbsp;; sa description en mots est
+          donnée à côté de la carte, sous le choix de l’affichage.
+        </figcaption>
+      </figure>
+    </Planche>
+
+    <aside class="texte" aria-labelledby="titre-affichage">
+      <h2 id="titre-affichage" class="titre-sous-section">Affichage</h2>
+      <fieldset class="selecteur">
+        <legend class="selecteur-legende">Affichage</legend>
+        <div class="selecteur-options">
+          <div class="selecteur-option">
+            <input
+              type="radio"
+              id="couche-points"
+              name="couche"
+              value="points"
+              checked
+            />
+            <label for="couche-points">Points</label>
+          </div>
+          <div class="selecteur-option">
+            <input
+              type="radio"
+              id="couche-chaleur"
+              name="couche"
+              value="chaleur"
+              aria-describedby="note-chaleur"
+            />
+            <label for="couche-chaleur">Chaleur</label>
+          </div>
+        </div>
+      </fieldset>
+      <p class="selecteur-note" id="note-chaleur">
+        La carte de chaleur est purement visuelle&nbsp;: plus la couleur est
+        foncée, plus les établissements sont nombreux et proches. Par exemple,{" "}
+        <strong>{voisinsTexte}</strong> établissements se trouvent à moins de {RAYON_KM}&nbsp;km
+        de «&nbsp;{plusDense.name}&nbsp;», le secteur le plus dense du fichier
+        (distances à vol d’oiseau, calculées à partir des coordonnées).
+      </p>
+
+      <h2 id="titre-legende" class="titre-sous-section">Légende</h2>
+      <ul class="cles" id="legende-points">
+        <li class="cle">
+          <span class="cle-pastille cle-pastille--point" aria-hidden="true"
+          ></span>
+          Un établissement d’enseignement supérieur
+        </li>
+      </ul>
+      <div class="cle-densite" id="legende-chaleur" hidden>
+        <span class="cle-densite-barre" id="barre-densite" aria-hidden="true"
+        ></span>
+        <p class="cle-densite-mots">
+          <span>Densité faible</span>
+          <span>Densité forte</span>
+        </p>
+      </div>
+
+      <h2 class="titre-sous-section">Lire la carte</h2>
+      <ul class="liste-tirets">
+        <li id="aide-points">
+          Cliquez sur un point pour afficher le nom de l’établissement.
+        </li>
+        <li id="aide-chaleur" hidden>
+          Plus la couleur est foncée, plus les établissements sont nombreux
+          autour de cet endroit. Zoomez pour voir la densité se préciser.
+        </li>
+        <li>
+          Zoomez avec la molette, en pinçant l’écran ou avec les boutons + et −.
+        </li>
+        <li>
+          Au clavier&nbsp;: placez le focus sur la carte, déplacez-la avec les
+          flèches et zoomez avec les touches + et −.
+        </li>
+        <li>
+          L’échelle en bas à gauche de la carte s’adapte au niveau de zoom.
+        </li>
+      </ul>
+    </aside>
+  </div>
+</Layout>
+
+<script>
+  import listeEtablissements from "../assets/listeEtablissements.json";
+
+  // Import de la bibliothèque Leaflet pour créer la carte interactive
+  import L from "leaflet";
+
+  // preferCanvas : rendu canvas, fluide pour 2507 points. On utilise des
+  // L.circleMarker plutôt que des L.marker, dont les icônes par défaut sont
+  // cassées par le bundler Vite.
+  // Dans l'élément d'ID "map" : carte centrée sur la France (lat: 46.6033, lon: 1.883), zoom 6
+  const map = L.map("map", { preferCanvas: true }).setView([46.6033, 1.883], 6);
+
+  // Fond de carte OpenStreetMap (l'attribution est obligatoire)
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+
+  // Échelle graphique en kilomètres, mise à jour à chaque zoom
+  L.control.scale({ imperial: false }).addTo(map);
+
+  // Couche « points » : tous les cercles sont regroupés dans un L.layerGroup
+  const couchePoints = L.layerGroup();
+  // Coordonnées valides, au format [lat, lon, intensité] attendu par leaflet.heat
+  const pointsChaleur: L.HeatLatLngTuple[] = [];
+
+  for (const etablissement of listeEtablissements) {
+    const { name, lat, lon } = etablissement;
+
+    // On ignore les entrées dont les coordonnées ne sont pas des nombres valides
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+    pointsChaleur.push([lat, lon, 1]);
+
+    // Popup construite avec textContent : le nom n'est pas interprété comme du HTML
+    const contenu = document.createElement("p");
+    contenu.textContent = name;
+
+    // Point vermillon cerné d'encre (mêmes couleurs que dans global.css :
+    // le rendu canvas ne lit pas les variables CSS)
+    L.circleMarker([lat, lon], {
+      radius: 5,
+      color: "#161b22",
+      weight: 1,
+      fillColor: "#d9381a",
+      fillOpacity: 0.85,
+    })
+      // maxWidth : la popup tient dans la carte sur un écran de 360 px
+      .bindPopup(contenu, { maxWidth: 240 })
+      .addTo(couchePoints);
+  }
+
+  // Dégradé de la chaleur, du clair au foncé (palette de l'atlas).
+  // Les clés vont de 0 (densité faible) à 1 (densité forte).
+  const degrade = {
+    0.2: "#f6dcb0",
+    0.45: "#ee9c4f",
+    0.7: "#d9381a",
+    1.0: "#7a1a06",
+  };
+
+  // leaflet.heat est un ancien script qui écrit dans la variable globale `L`
+  // (L.HeatLayer, L.heatLayer). Avec Vite, `import L` ne crée pas toujours
+  // window.L, et les `import` statiques sont exécutés avant le reste du module.
+  // On pose donc window.L d'abord, puis on charge le plugin par un import
+  // dynamique, évalué seulement à cette ligne. Le cast est ciblé : le type de
+  // window n'a pas de propriété L. L'objet L de Leaflet (version UMD) est un
+  // objet ordinaire, donc extensible : le plugin peut y ajouter ses fonctions.
+  // (Un espace de noms ES serait figé et refuserait l'ajout.)
+  (window as unknown as { L: typeof L }).L = L;
+  await import("leaflet.heat");
+
+  // Couche « chaleur » : réglages pensés pour la France entière (zoom 6)
+  // comme pour une ville. maxZoom : à partir de ce zoom chaque point pèse 1 ;
+  // en dessous, son poids est divisé par 2 à chaque niveau (1/16 au zoom 6),
+  // pour que Paris ne sature pas toute la carte.
+  // max : poids cumulé qui donne la couleur la plus foncée.
+  const coucheChaleur = L.heatLayer(pointsChaleur, {
+    radius: 18,
+    blur: 22,
+    max: 4,
+    minOpacity: 0.25,
+    maxZoom: 10,
+    gradient: degrade,
+  });
+
+  // Barre de légende : même dégradé que la couche (crème pour le départ)
+  const arrets = Object.entries(degrade)
+    // Tri par position : dans un objet, la clé entière "1" passe avant "0.2"
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([position, couleur]) => `${couleur} ${Number(position) * 100}%`)
+    .join(", ");
+  const barre = document.getElementById("barre-densite");
+  if (barre) {
+    barre.style.background = `linear-gradient(to right, #fbf1dc 0%, ${arrets})`;
+  }
+
+  // Sélecteur Points / Chaleur : une seule couche visible à la fois
+  const legendePoints = document.getElementById("legende-points");
+  const legendeChaleur = document.getElementById("legende-chaleur");
+  const aidePoints = document.getElementById("aide-points");
+  const aideChaleur = document.getElementById("aide-chaleur");
+
+  function afficher(choix: string) {
+    const chaleur = choix === "chaleur";
+    if (chaleur) {
+      map.removeLayer(couchePoints);
+      coucheChaleur.addTo(map);
+    } else {
+      map.removeLayer(coucheChaleur);
+      couchePoints.addTo(map);
+    }
+    // La légende et l'aide suivent l'affichage
+    if (legendePoints) legendePoints.hidden = chaleur;
+    if (aidePoints) aidePoints.hidden = chaleur;
+    if (legendeChaleur) legendeChaleur.hidden = !chaleur;
+    if (aideChaleur) aideChaleur.hidden = !chaleur;
+  }
+
+  for (const radio of document.querySelectorAll<HTMLInputElement>(
+    'input[name="couche"]',
+  )) {
+    radio.addEventListener("change", () => {
+      if (radio.checked) afficher(radio.value);
+    });
+  }
+
+  // Affichage initial : celui du bouton coché (le navigateur peut restaurer un choix)
+  afficher(
+    document.querySelector<HTMLInputElement>('input[name="couche"]:checked')
+      ?.value ?? "points",
+  );
+</script>

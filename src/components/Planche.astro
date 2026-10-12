@@ -1,0 +1,31 @@
+---
+// Cadre de planche : filet double, repères de coupe aux quatre angles et
+// bandeau (numéro de planche à gauche, note à droite). Le contenu du composant
+// (graphique ou carte) est placé dans le cadre.
+interface Props {
+  /** Numéro de planche ("01", "02", "03") */
+  numero: string;
+  /** Courte note affichée à droite du bandeau (source, projection, etc.) */
+  note: string;
+  /** true : pas de marge intérieure, le contenu touche le cadre */
+  pleine?: boolean;
+}
+
+const { numero, note, pleine = false } = Astro.props;
+---
+
+<div class:list={["planche", { "planche--pleine": pleine }]}>
+  <span class="repere repere--hg" aria-hidden="true"></span>
+  <span class="repere repere--hd" aria-hidden="true"></span>
+  <span class="repere repere--bg" aria-hidden="true"></span>
+  <span class="repere repere--bd" aria-hidden="true"></span>
+  <div class="planche-cadre">
+    <p class="planche-bandeau">
+      <span>Planche {numero}</span>
+      <span>{note}</span>
+    </p>
+    <div class="planche-corps">
+      <slot />
+    </div>
+  </div>
+</div>
